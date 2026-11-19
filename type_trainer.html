@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Type Chart Trainer</title>
+<style>
+:root{--bg:#f4f4f8;--fg:#1d1d24;--card:#fff;--line:#d8d8e2;--accent:#3b5bdb;--good:#2fbf5b;--bad:#e5484d}
+@media (prefers-color-scheme:dark){:root{--bg:#15151b;--fg:#ececf2;--card:#22222b;--line:#3a3a47;--accent:#7c93ff}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+#app{max-width:760px;margin:0 auto;padding:20px 16px 40px;min-height:100vh;display:flex;flex-direction:column}
+h1{text-align:center;margin:20px 0}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:12px;padding:10px 16px}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.3;cursor:not-allowed}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700;font-size:1.1rem;padding:14px 40px}
+.seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;max-width:360px;margin:0 auto 10px}
+.seg.left{margin-left:0}
+.seg button{flex:1;border:0;border-radius:0;padding:12px;font-weight:700;background:var(--card)}
+.seg button.on{background:var(--accent);color:#fff}
+.lbl{font-weight:700;margin:16px 0 2px}
+.chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:8px 0}
+.chip{border:3px solid transparent;font-weight:700;text-transform:uppercase;font-size:.78rem;padding:10px 4px;border-radius:10px}
+.chip.sel{border-color:var(--fg);transform:scale(1.05)}
+.chip.plain{background:var(--card);color:var(--fg);border:3px solid var(--line)}
+.chip.plain.sel{border-color:var(--fg)}
+.chip.wide{grid-column:1/-1}
+.chk{display:block;margin:14px 0}
+.start{text-align:center;margin-top:18px}
+.top{display:flex;justify-content:space-between;align-items:center}
+.bar{height:6px;background:var(--line);border-radius:3px;margin:12px 0}
+.bar div{height:100%;background:var(--accent);border-radius:3px;transition:width .2s}
+.matchup{display:grid;grid-template-columns:1fr auto 1fr;column-gap:clamp(8px,3vw,28px);row-gap:8px;align-items:center;justify-items:center;width:100%;margin:auto;padding:24px 0}
+.matchup small{opacity:.65;text-transform:uppercase;letter-spacing:.1em;font-size:.75rem}
+.side{display:flex;flex-direction:column;gap:8px;width:100%;max-width:250px}
+.badge{display:block;text-align:center;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-radius:14px;padding:18px 10px;font-size:clamp(1.05rem,4.5vw,1.6rem)}
+.arrow{width:clamp(36px,10vw,70px);color:var(--fg);opacity:.8}
+.arrow.flip{transform:scaleX(-1)}
+.feedback{margin-bottom:14px}
+.answers{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px}
+.answers button{font-size:1.5rem;font-weight:800;padding:20px 6px}
+.answers button.right{background:var(--good);color:#fff;border-color:var(--good)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+@media (max-width:560px){.cols{grid-template-columns:1fr}}
+.col{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.col h3{margin:0;padding:10px 14px;color:#fff;font-size:1rem}
+.col.g h3{background:var(--good)}.col.b h3{background:var(--bad)}
+.col ul{list-style:none;margin:0;padding:6px 14px;max-height:300px;overflow-y:auto;font-size:.92rem}
+.col li{padding:5px 0;border-bottom:1px solid var(--line)}
+.col li:last-child{border:0}
+.col li em{opacity:.6;font-style:normal}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+#flash{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
+#flash.good{background:var(--good);opacity:.3}#flash.bad{background:var(--bad);opacity:.3}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="flash"></div>
+<script>
+const FEEDBACK_MS=1500; // how long feedback stays on screen
+const TYPES=["Normal","Fire","Water","Electric","Grass","Ice","Fighting","Poison","Ground","Flying","Psychic","Bug","Rock","Ghost","Dragon","Dark","Steel","Fairy"];
+// attacker: [super effective, not very effective, no effect]
+const SRC={
+Normal:[[],["Rock","Steel"],["Ghost"]],
+Fire:[["Grass","Ice","Bug","Steel"],["Fire","Water","Rock","Dragon"],[]],
+Water:[["Fire","Ground","Rock"],["Water","Grass","Dragon"],[]],
+Electric:[["Water","Flying"],["Electric","Grass","Dragon"],["Ground"]],
+Grass:[["Water","Ground","Rock"],["Fire","Grass","Poison","Flying","Bug","Dragon","Steel"],[]],
+Ice:[["Grass","Ground","Flying","Dragon"],["Fire","Water","Ice","Steel"],[]],
+Fighting:[["Normal","Ice","Rock","Dark","Steel"],["Poison","Flying","Psychic","Bug","Fairy"],["Ghost"]],
+Poison:[["Grass","Fairy"],["Poison","Ground","Rock","Ghost"],["Steel"]],
+Ground:[["Fire","Electric","Poison","Rock","Steel"],["Grass","Bug"],["Flying"]],
+Flying:[["Grass","Fighting","Bug"],["Electric","Rock","Steel"],[]],
+Psychic:[["Fighting","Poison"],["Psychic","Steel"],["Dark"]],
+Bug:[["Grass","Psychic","Dark"],["Fire","Fighting","Poison","Flying","Ghost","Steel","Fairy"],[]],
+Rock:[["Fire","Ice","Flying","Bug"],["Fighting","Ground","Steel"],[]],
+Ghost:[["Psychic","Ghost"],["Dark"],["Normal"]],
+Dragon:[["Dragon"],["Steel"],["Fairy"]],
+Dark:[["Psychic","Ghost"],["Fighting","Dark","Fairy"],[]],
+Steel:[["Ice","Rock","Fairy"],["Fire","Water","Electric","Steel"],[]],
+Fairy:[["Fighting","Dragon","Dark"],["Fire","Poison","Steel"],[]]};
+const COLORS={Normal:"#A8A77A",Fire:"#EE8130",Water:"#6390F0",Electric:"#F7D02C",Grass:"#7AC74C",Ice:"#96D9D6",Fighting:"#C22E28",Poison:"#A33EA1",Ground:"#E2BF65",Flying:"#A98FF3",Psychic:"#F95587",Bug:"#A6B91A",Rock:"#B6A136",Ghost:"#735797",Dragon:"#6F35FC",Dark:"#705746",Steel:"#B7B7CE",Fairy:"#D685AD"};
+const DARK=new Set(["Electric","Ice","Ground","Steel","Fairy","Normal"]);
+const CH={};
+for(const a of TYPES){CH[a]={};TYPES.forEach(d=>CH[a][d]=1);const[s,n,z]=SRC[a];s.forEach(d=>CH[a][d]=2);n.forEach(d=>CH[a][d]=.5);z.forEach(d=>CH[a][d]=0)}
+const mult=(a,defs)=>defs.reduce((m,d)=>m*CH[a][d],1);
+const LBL={0:"0×",0.25:"¼×",0.5:"½×",1:"1×",2:"2×",4:"4×"};
+const PAIRS=[];for(let x=0;x<18;x++)for(let y=x+1;y<18;y++)PAIRS.push([TYPES[x],TYPES[y]]);
+
+const cfg={mode:"atk",atk:null,size:20,dual:false,d1:null,d2:null};
+let screen="menu",mode="atk",deck=[],i=0,results=[],locked=true,answers=[],timer=null;
+const $=id=>document.getElementById(id);
+const shuffle=a=>{for(let k=a.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[a[k],a[j]]=[a[j],a[k]]}return a};
+const badge=t=>`<span class="badge" style="background:${COLORS[t]};color:${DARK.has(t)?'#222':'#fff'}">${t}</span>`;
+const arrow=flip=>`<svg class="arrow ${flip?"flip":""}" viewBox="0 0 80 40" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20h64M52 6l18 14-18 14"/></svg>`;
+const flash=c=>{$("flash").className=c||""};
+
+// ---------- menu ----------
+const chip=(t,sel,fn,dis)=>`<button class="chip ${sel?"sel":""}" style="background:${COLORS[t]};color:${DARK.has(t)?'#222':'#fff'}" onclick="${fn}" ${dis?"disabled":""}>${t}</button>`;
+const plain=(label,sel,fn,cls="")=>`<button class="chip plain ${cls} ${sel?"sel":""}" onclick="${fn}">${label}</button>`;
+function set(k,v){cfg[k]=v;if(k==="d1"&&cfg.d2===v)cfg.d2=null;menu()}
+function menu(){
+  clearTimeout(timer);flash();locked=true;screen="menu";
+  let body;
+  if(cfg.mode==="atk"){
+    body=`<div class="lbl">Attacking type</div><div class="chips">
+      ${plain("ALL",cfg.atk==="random","set('atk','random')")}
+      ${TYPES.map(t=>chip(t,cfg.atk===t,`set('atk','${t}')`)).join("")}</div>
+      <div class="lbl">Dual-type defenders</div>
+      <div class="seg left"><button class="${!cfg.dual?"on":""}" onclick="set('dual',false)">Off</button><button class="${cfg.dual?"on":""}" onclick="set('dual',true)">On</button></div>
+      ${cfg.atk&&(cfg.atk==="random"||cfg.dual)?`<div class="lbl">Number of cards</div><div class="chips">${[5,10,20,50,0].map(n=>plain(n||"All",cfg.size===n,`set('size',${n})`)).join("")}</div>`:""}`;
+  }else{
+    body=`<div class="lbl">Defending type</div><div class="chips">${TYPES.map(t=>chip(t,cfg.d1===t,`set('d1','${t}')`)).join("")}</div>
+      <div class="lbl">Second type</div><div class="chips">
+      ${plain("None",!cfg.d2,"set('d2',null)")}
+      ${TYPES.map(t=>chip(t,cfg.d2===t,`set('d2','${t}')`,!cfg.d1||cfg.d1===t)).join("")}</div>`;
+  }
+  const ready=cfg.mode==="atk"?!!cfg.atk:!!cfg.d1;
+  $("app").innerHTML=`<h1>Type Chart Trainer</h1>
+    <div class="seg"><button class="${cfg.mode==="atk"?"on":""}" onclick="set('mode','atk')">Attacker</button><button class="${cfg.mode==="def"?"on":""}" onclick="set('mode','def')">Defender</button></div>
+    ${body}<div class="start"><button class="primary" onclick="start()" ${ready?"":"disabled"}>Start</button></div>`;
+}
+function start(){
+  mode=cfg.mode;let pool=[];
+  if(mode==="atk"){
+    const atks=cfg.atk==="random"?TYPES:[cfg.atk],defs=cfg.dual?PAIRS:TYPES.map(t=>[t]);
+    for(const a of atks)for(const d of defs)pool.push([a,d]);
+    shuffle(pool);
+    if((cfg.atk==="random"||cfg.dual)&&cfg.size)pool=pool.slice(0,cfg.size);
+  }else{
+    const d=cfg.d2?[cfg.d1,cfg.d2]:[cfg.d1];
+    pool=TYPES.map(a=>[a,d]);
+  }
+  startRound(pool);
+}
+
+// ---------- quiz ----------
+function startRound(d){
+  clearTimeout(timer);
+  deck=shuffle(d.slice());i=0;results=[];
+  answers=deck.some(c=>c[1].length===2)?[0,.25,.5,1,2,4]:[0,.5,1,2];
+  question();
+}
+function question(){
+  flash();screen="quiz";
+  if(i>=deck.length)return showResults();
+  const[a,defs]=deck[i],flip=mode==="def";
+  const A=`<div class="side">${badge(a)}</div>`,D=`<div class="side">${defs.map(badge).join("")}</div>`;
+  const L=flip?["Defender",D]:["Attacker",A],R=flip?["Attacker",A]:["Defender",D];
+  $("app").innerHTML=`<div class="top"><button onclick="menu()">Quit</button><span>${i+1} / ${deck.length}</span></div>
+  <div class="bar"><div style="width:${i/deck.length*100}%"></div></div>
+  <div class="matchup"><small>${L[0]}</small><span></span><small>${R[0]}</small>${L[1]}${arrow(flip)}${R[1]}</div>
+  <div class="feedback" id="fb"></div>
+  <div class="answers">${answers.map(v=>`<button data-v="${v}" onclick="answer(${v})">${LBL[v]}</button>`).join("")}</div>`;
+  locked=false;
+}
+function answer(v){
+  if(locked)return;locked=true;
+  const[a,d]=deck[i],right=mult(a,d),ok=Math.abs(v-right)<1e-9;
+  results.push({item:deck[i],ok,v});
+  flash(ok?"good":"bad");
+  document.querySelectorAll(".answers button").forEach(b=>{
+    if(+b.dataset.v===right)b.classList.add("right")});
+  i++;timer=setTimeout(question,FEEDBACK_MS);
+}
+document.addEventListener("keydown",e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(screen!=="menu"&&k==="q")return menu();
+  if(screen!=="menu"&&k==="r"&&deck.length)return startRound(deck);
+  if(!locked&&$("fb")&&/^[1-6]$/.test(e.key)&&answers[+e.key-1]!==undefined)answer(answers[+e.key-1]);
+});
+
+// ---------- results ----------
+const fmt=c=>`${c.item[0]} → ${c.item[1].join(" / ")} = ${LBL[mult(c.item[0],c.item[1])]}`;
+function showResults(){
+  screen="results";
+  const g=results.filter(r=>r.ok),b=results.filter(r=>!r.ok);
+  window._a=results.map(r=>r.item);window._g=g.map(r=>r.item);window._b=b.map(r=>r.item);
+  $("app").innerHTML=`<h1>${g.length} / ${results.length} correct</h1>
+  <div class="cols">
+   <div class="col b"><h3>Incorrect (${b.length})</h3><ul>${b.map(r=>`<li>${fmt(r)} <em>(you: ${LBL[r.v]})</em></li>`).join("")}</ul></div>
+   <div class="col g"><h3>Correct (${g.length})</h3><ul>${g.map(r=>`<li>${fmt(r)}</li>`).join("")}</ul></div>
+  </div>
+  <div class="actions">
+   <button onclick="startRound(_a)">Practice All (${results.length})</button>
+   <button onclick="startRound(_b)" ${b.length?"":"disabled"}>Practice incorrect (${b.length})</button>
+   <button onclick="startRound(_g)" ${g.length?"":"disabled"}>Practice correct (${g.length})</button>
+   <button onclick="menu()">Menu</button></div>`;
+}
+menu();
+</script>
+</body>
+</html>
